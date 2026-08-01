@@ -99,11 +99,9 @@ jobs:
     permissions:
       contents: write
     uses: themoretheless/.github/.github/workflows/release-rust-library.yml@v1
-    with:
-      rust_toolchain: "1.85"
 ```
 
-No release is created when the Cargo version is unchanged. Re-running a partially completed release is safe when the existing tag points to the same commit.
+No release is created when the Cargo version is unchanged. Re-running a partially completed release is safe when the existing tag points to the same commit. The default toolchain is `stable`; set `rust_toolchain` explicitly to enforce the library's MSRV.
 
 For a package inside a workspace, identify it explicitly:
 
