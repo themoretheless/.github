@@ -146,11 +146,7 @@ jobs:
             fi
           }
 
-          current_metadata=$(
-            cargo metadata
-              --manifest-path "$MANIFEST_PATH"
-              "${metadata_args[@]}"
-          )
+          current_metadata=$(cargo metadata --manifest-path "$MANIFEST_PATH" "${metadata_args[@]}")
           new_version=$(select_version "$current_metadata")
 
           if [[ -z "$new_version" ]]; then
@@ -169,11 +165,7 @@ jobs:
             trap cleanup EXIT
 
             git worktree add --detach "$before_dir" "$BEFORE"
-            old_metadata=$(
-              cargo metadata
-                --manifest-path "${before_dir}/${MANIFEST_PATH}"
-                "${metadata_args[@]}"
-            )
+            old_metadata=$(cargo metadata --manifest-path "${before_dir}/${MANIFEST_PATH}" "${metadata_args[@]}")
             old_version=$(select_version "$old_metadata")
 
             cleanup
