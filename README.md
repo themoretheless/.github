@@ -17,10 +17,10 @@ jobs:
       pages: read
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
 
       # Build the static site into dist/ here.
 
-      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
