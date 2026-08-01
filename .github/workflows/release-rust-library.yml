@@ -1,0 +1,318 @@
+name: Release Rust library
+
+on:
+  workflow_call:
+    inputs:
+      manifest_path:
+        description: Repository-relative path to Cargo.toml
+        required: false
+        type: string
+        default: Cargo.toml
+      package_name:
+        description: Cargo package name; required for multi-package workspaces
+        required: false
+        type: string
+        default: ""
+      cargo_workspaces:
+        description: Cargo workspaces passed to rust-cache
+        required: false
+        type: string
+        default: ". -> target"
+      rust_toolchain:
+        description: Rust toolchain used for metadata and checks
+        required: false
+        type: string
+        default: stable
+      tag_prefix:
+        description: Prefix prepended to the Cargo package version
+        required: false
+        type: string
+        default: v
+      locked:
+        description: Require Cargo.lock to be up to date
+        required: false
+        type: boolean
+        default: true
+      run_fmt:
+        description: Run rustfmt before releasing
+        required: false
+        type: boolean
+        default: true
+      run_clippy:
+        description: Run Clippy before releasing
+        required: false
+        type: boolean
+        default: true
+      run_tests:
+        description: Run tests before releasing
+        required: false
+        type: boolean
+        default: true
+      clippy_args:
+        description: Whitespace-separated Cargo arguments for Clippy
+        required: false
+        type: string
+        default: "--all-targets"
+      test_args:
+        description: Whitespace-separated Cargo arguments for tests
+        required: false
+        type: string
+        default: ""
+    outputs:
+      changed:
+        description: Whether the package version changed in this push
+        value: ${{ jobs.validate.outputs.changed }}
+      version:
+        description: Current Cargo package version
+        value: ${{ jobs.validate.outputs.version }}
+      tag:
+        description: Release tag derived from the version
+        value: ${{ jobs.validate.outputs.tag }}
+      release_url:
+        description: GitHub Release URL when a release exists
+        value: ${{ jobs.release.outputs.release_url }}
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      changed: ${{ steps.version.outputs.changed }}
+      version: ${{ steps.version.outputs.new }}
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: ${{ inputs.rust_toolchain }}
+          components: rustfmt,clippy
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
+        with:
+          workspaces: ${{ inputs.cargo_workspaces }}
+
+      - name: Compare package versions
+        id: version
+        shell: bash
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          LOCKED: ${{ inputs.locked }}
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          TAG_PREFIX: ${{ inputs.tag_prefix }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" != "push" || -z "$BEFORE" ]]; then
+            echo "::error::This workflow must be called from a push-triggered workflow"
+            exit 1
+          fi
+
+          metadata_args=(--no-deps --format-version 1)
+          if [[ "$LOCKED" == "true" ]]; then
+            metadata_args+=(--locked)
+          fi
+
+          select_version() {
+            local metadata=$1
+
+            if [[ -n "$PACKAGE_NAME" ]]; then
+              jq -r --arg name "$PACKAGE_NAME" '
+                [.packages[] | select(.name == $name)] |
+                if length > 1 then error("package_name matched multiple packages")
+                elif length == 1 then .[0].version
+                else ""
+                end
+              ' <<< "$metadata"
+            else
+              jq -r '
+                if (.packages | length) == 1 then .packages[0].version
+                else error("multiple workspace packages; set package_name")
+                end
+              ' <<< "$metadata"
+            fi
+          }
+
+          current_metadata=$(
+            cargo metadata
+              --manifest-path "$MANIFEST_PATH"
+              "${metadata_args[@]}"
+          )
+          new_version=$(select_version "$current_metadata")
+
+          if [[ -z "$new_version" ]]; then
+            echo "::error::Cargo package was not found; check package_name and manifest_path"
+            exit 1
+          fi
+
+          old_version=""
+          if [[ ! "$BEFORE" =~ ^0+$ ]] &&
+             git cat-file -e "${BEFORE}:${MANIFEST_PATH}" 2>/dev/null; then
+            before_dir="${RUNNER_TEMP}/release-before-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+            cleanup() {
+              git worktree remove --force "$before_dir" >/dev/null 2>&1 || true
+            }
+            trap cleanup EXIT
+
+            git worktree add --detach "$before_dir" "$BEFORE"
+            old_metadata=$(
+              cargo metadata
+                --manifest-path "${before_dir}/${MANIFEST_PATH}"
+                "${metadata_args[@]}"
+            )
+            old_version=$(select_version "$old_metadata")
+
+            cleanup
+            trap - EXIT
+          fi
+
+          tag="${TAG_PREFIX}${new_version}"
+          if ! git check-ref-format "refs/tags/${tag}" >/dev/null; then
+            echo "::error::Invalid release tag: ${tag}"
+            exit 1
+          fi
+
+          {
+            echo "old=${old_version}"
+            echo "new=${new_version}"
+            echo "tag=${tag}"
+          } >> "$GITHUB_OUTPUT"
+
+          if [[ "$old_version" == "$new_version" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Version is unchanged: ${new_version}"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Version changed: ${old_version:-<new package>} -> ${new_version}"
+          fi
+
+      - name: Check formatting
+        if: steps.version.outputs.changed == 'true' && inputs.run_fmt
+        shell: bash
+        env:
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+        run: cargo fmt --manifest-path "$MANIFEST_PATH" --all -- --check
+
+      - name: Run Clippy
+        if: steps.version.outputs.changed == 'true' && inputs.run_clippy
+        shell: bash
+        env:
+          CLIPPY_ARGS: ${{ inputs.clippy_args }}
+          LOCKED: ${{ inputs.locked }}
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+        run: |
+          set -euo pipefail
+
+          args=()
+          if [[ -n "$CLIPPY_ARGS" ]]; then
+            read -r -a args <<< "$CLIPPY_ARGS"
+          fi
+          if [[ "$LOCKED" == "true" ]]; then
+            args+=(--locked)
+          fi
+
+          cargo clippy --manifest-path "$MANIFEST_PATH" "${args[@]}" -- -D warnings
+
+      - name: Run tests
+        if: steps.version.outputs.changed == 'true' && inputs.run_tests
+        shell: bash
+        env:
+          LOCKED: ${{ inputs.locked }}
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+          TEST_ARGS: ${{ inputs.test_args }}
+        run: |
+          set -euo pipefail
+
+          args=()
+          if [[ -n "$TEST_ARGS" ]]; then
+            read -r -a args <<< "$TEST_ARGS"
+          fi
+          if [[ "$LOCKED" == "true" ]]; then
+            args+=(--locked)
+          fi
+
+          cargo test --manifest-path "$MANIFEST_PATH" "${args[@]}"
+
+  release:
+    name: Create tag and GitHub Release
+    needs: validate
+    if: needs.validate.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    outputs:
+      release_url: ${{ steps.release.outputs.url }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Create tag and GitHub Release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          head_sha=$(git rev-parse HEAD)
+          remote_target=$(
+            git ls-remote origin "refs/tags/${TAG}^{}" |
+              awk 'NR == 1 { print $1 }'
+          )
+          if [[ -z "$remote_target" ]]; then
+            remote_target=$(
+              git ls-remote origin "refs/tags/${TAG}" |
+                awk 'NR == 1 { print $1 }'
+            )
+          fi
+
+          if [[ -n "$remote_target" && "$remote_target" != "$head_sha" ]]; then
+            echo "::error::Tag ${TAG} already points to ${remote_target}, not ${head_sha}"
+            exit 1
+          fi
+
+          if [[ -z "$remote_target" ]]; then
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          else
+            echo "Tag ${TAG} already points to this commit"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub Release ${TAG} already exists"
+          else
+            release_flags=(--verify-tag --generate-notes --title "$TAG")
+            if [[ "$VERSION" == *-* ]]; then
+              release_flags+=(--prerelease)
+            fi
+            gh release create "$TAG" "${release_flags[@]}" >/dev/null
+          fi
+
+          release_url=$(gh release view "$TAG" --json url --jq .url)
+          echo "url=${release_url}" >> "$GITHUB_OUTPUT"
+          echo "Release: ${release_url}"
