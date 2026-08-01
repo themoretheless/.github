@@ -76,10 +76,50 @@ jobs:
 
 Android, iOS, and WASM packaging stay in platform-specific workflows; this workflow checks the shared host-side Rust code.
 
+## Release a Rust library
+
+This reusable workflow watches the caller's push event, compares the Cargo package version with the previous commit, runs release checks, then creates an annotated `v{version}` tag and a GitHub Release:
+
+```yaml
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: themoretheless/.github/.github/workflows/release-rust-library.yml@v1
+    with:
+      rust_toolchain: "1.85"
+```
+
+No release is created when the Cargo version is unchanged. Re-running a partially completed release is safe when the existing tag points to the same commit.
+
+For a package inside a workspace, identify it explicitly:
+
+```yaml
+    with:
+      manifest_path: crates/tokenizer/Cargo.toml
+      package_name: themoretheless-tokenizer
+      cargo_workspaces: "crates/tokenizer -> target"
+```
+
+This workflow creates a GitHub tag and Release only; it does not publish to crates.io.
+
 ## Versioning
 
 - `@v1` follows backward-compatible updates in the current major version.
-- `@v1.1.0` pins this release.
+- `@v1.2.0` pins this release.
 - Use a full commit SHA when the caller requires an immutable reference.
 
 The doubled `.github/.github` in `uses` paths is intentional: the first `.github` is the repository name, and the second is its workflows or actions directory.
