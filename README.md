@@ -101,6 +101,15 @@ Use the release validation action to enforce branch policy and optional explicit
     confirmation-prefix: release
 ```
 
+The tag validation action makes release workflows safely repeatable and rejects an existing tag that points to another commit:
+
+```yaml
+- id: tag
+  uses: themoretheless/.github/.github/actions/validate-release-tag@v1
+  with:
+    tag: ${{ steps.package.outputs.tag }}
+```
+
 ## Run Rust CI
 
 The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:
