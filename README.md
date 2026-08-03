@@ -89,6 +89,18 @@ The version action selects a package from a Cargo workspace and exposes its vers
   run: echo "Preview ${{ steps.package.outputs.tag }}"
 ```
 
+Use the release validation action to enforce branch policy and optional explicit confirmation:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/validate-package-release@v1
+  with:
+    version: ${{ steps.package.outputs.version }}
+    tag: ${{ steps.package.outputs.tag }}
+    prerelease: ${{ steps.package.outputs.prerelease }}
+    confirmation: ${{ inputs.confirmation }}
+    confirmation-prefix: release
+```
+
 ## Run Rust CI
 
 The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:
