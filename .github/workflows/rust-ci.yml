@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      build_runner:
+        description: Runner used to build the workspace
+        required: false
+        type: string
+        default: ubuntu-latest
       clippy_args:
         description: Whitespace-separated Cargo arguments for Clippy
         required: false
@@ -33,6 +38,11 @@ on:
         required: false
         type: string
         default: "--workspace --no-fail-fast"
+      build_args:
+        description: Whitespace-separated Cargo arguments for build
+        required: false
+        type: string
+        default: "--workspace --all-targets"
       run_fmt:
         description: Run rustfmt
         required: false
@@ -45,6 +55,11 @@ on:
         default: true
       run_tests:
         description: Run tests
+        required: false
+        type: boolean
+        default: true
+      run_build:
+        description: Build the workspace
         required: false
         type: boolean
         default: true
@@ -116,6 +131,54 @@ jobs:
           fi
 
           cargo clippy "${args[@]}" -- -D warnings
+
+  build:
+    name: Build
+    if: ${{ inputs.run_build }}
+    runs-on: ${{ inputs.build_runner }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select Rust toolchain
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          RUST_TOOLCHAIN: ${{ inputs.rust_toolchain }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$RUST_TOOLCHAIN" ]]; then
+            rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+            rustup override set "$RUST_TOOLCHAIN"
+          fi
+
+          rustc --version --verbose
+          cargo --version
+
+      - name: Cache Rust dependencies
+        if: ${{ inputs.cache }}
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
+        with:
+          workspaces: "${{ inputs.working_directory }} -> target"
+
+      - name: Build workspace
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          BUILD_ARGS: ${{ inputs.build_args }}
+        run: |
+          set -euo pipefail
+
+          args=()
+          if [[ -n "$BUILD_ARGS" ]]; then
+            read -r -a args <<< "$BUILD_ARGS"
+          fi
+
+          cargo build "${args[@]}"
 
   test:
     name: Test (${{ matrix.runner }})
