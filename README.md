@@ -135,32 +135,6 @@ Validate or publish a Cargo package with the same action:
     registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 ```
 
-## Run Rust CI
-
-The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:
-
-```yaml
-jobs:
-  rust:
-    permissions:
-      contents: read
-    uses: themoretheless/.github/.github/workflows/rust-ci.yml@v1
-    with:
-      working_directory: backend
-      rust_toolchain: "1.96.0"
-      test_runners: '["ubuntu-latest", "macos-latest", "windows-latest"]'
-      clippy_args: "--workspace --all-targets --locked"
-      build_args: "--workspace --all-targets --all-features --locked"
-      test_args: "--workspace --no-fail-fast --locked"
-      run_docs: true
-      doc_args: "--workspace --no-deps --all-features --locked"
-      run_package: true
-      package_args: "--locked"
-```
-
-Android, iOS, and WASM packaging stay in platform-specific workflows; this workflow checks the shared host-side Rust code.
-Documentation and package checks are opt-in because not every Rust repository publishes a library crate.
-
 ## Release a Rust library
 
 This reusable workflow watches the caller's push event, compares the Cargo package version with the previous commit, runs release checks, then creates an annotated `v{version}` tag and a GitHub Release:
