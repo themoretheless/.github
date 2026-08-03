@@ -75,6 +75,20 @@ steps:
       cargo-workspaces: ". -> target"
 ```
 
+## Resolve a Cargo package version
+
+The version action selects a package from a Cargo workspace and exposes its version, tag, and SemVer prerelease status:
+
+```yaml
+- id: package
+  uses: themoretheless/.github/.github/actions/cargo-package-version@v1
+  with:
+    package-name: themoretheless-tokenizer
+
+- if: steps.package.outputs.prerelease == 'true'
+  run: echo "Preview ${{ steps.package.outputs.tag }}"
+```
+
 ## Run Rust CI
 
 The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:
