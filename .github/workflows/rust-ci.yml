@@ -107,28 +107,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Select Rust toolchain
-        shell: bash
-        working-directory: ${{ inputs.working_directory }}
-        env:
-          RUST_TOOLCHAIN: ${{ inputs.rust_toolchain }}
-        run: |
-          set -euo pipefail
-
-          if [[ -n "$RUST_TOOLCHAIN" ]]; then
-            rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-            rustup override set "$RUST_TOOLCHAIN"
-          fi
-
-          rustup component add rustfmt clippy
-          rustc --version --verbose
-          cargo --version
-
-      - name: Cache Rust dependencies
-        if: ${{ inputs.cache }}
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - name: Set up Rust
+        uses: themoretheless/.github/.github/actions/setup-rust@6ff5952f2356f9bddc1ba6e266218d3bd0a4a993 # v1
         with:
-          workspaces: "${{ inputs.working_directory }} -> target"
+          rust-toolchain: ${{ inputs.rust_toolchain }}
+          components: rustfmt,clippy
+          working-directory: ${{ inputs.working_directory }}
+          cargo-workspaces: "${{ inputs.working_directory }} -> target"
+          cache: ${{ inputs.cache }}
 
       - name: Check formatting
         if: ${{ inputs.run_fmt }}
@@ -196,27 +182,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Select Rust toolchain
-        shell: bash
-        working-directory: ${{ inputs.working_directory }}
-        env:
-          RUST_TOOLCHAIN: ${{ inputs.rust_toolchain }}
-        run: |
-          set -euo pipefail
-
-          if [[ -n "$RUST_TOOLCHAIN" ]]; then
-            rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-            rustup override set "$RUST_TOOLCHAIN"
-          fi
-
-          rustc --version --verbose
-          cargo --version
-
-      - name: Cache Rust dependencies
-        if: ${{ inputs.cache }}
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - name: Set up Rust
+        uses: themoretheless/.github/.github/actions/setup-rust@6ff5952f2356f9bddc1ba6e266218d3bd0a4a993 # v1
         with:
-          workspaces: "${{ inputs.working_directory }} -> target"
+          rust-toolchain: ${{ inputs.rust_toolchain }}
+          working-directory: ${{ inputs.working_directory }}
+          cargo-workspaces: "${{ inputs.working_directory }} -> target"
+          cache: ${{ inputs.cache }}
 
       - name: Build workspace
         shell: bash
@@ -249,27 +221,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Select Rust toolchain
-        shell: bash
-        working-directory: ${{ inputs.working_directory }}
-        env:
-          RUST_TOOLCHAIN: ${{ inputs.rust_toolchain }}
-        run: |
-          set -euo pipefail
-
-          if [[ -n "$RUST_TOOLCHAIN" ]]; then
-            rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-            rustup override set "$RUST_TOOLCHAIN"
-          fi
-
-          rustc --version --verbose
-          cargo --version
-
-      - name: Cache Rust dependencies
-        if: ${{ inputs.cache }}
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - name: Set up Rust
+        uses: themoretheless/.github/.github/actions/setup-rust@6ff5952f2356f9bddc1ba6e266218d3bd0a4a993 # v1
         with:
-          workspaces: "${{ inputs.working_directory }} -> target"
+          rust-toolchain: ${{ inputs.rust_toolchain }}
+          working-directory: ${{ inputs.working_directory }}
+          cargo-workspaces: "${{ inputs.working_directory }} -> target"
+          cache: ${{ inputs.cache }}
 
       - name: Run tests
         shell: bash
