@@ -73,9 +73,14 @@ jobs:
       clippy_args: "--workspace --all-targets --locked"
       build_args: "--workspace --all-targets --all-features --locked"
       test_args: "--workspace --no-fail-fast --locked"
+      run_docs: true
+      doc_args: "--workspace --no-deps --all-features --locked"
+      run_package: true
+      package_args: "--locked"
 ```
 
 Android, iOS, and WASM packaging stay in platform-specific workflows; this workflow checks the shared host-side Rust code.
+Documentation and package checks are opt-in because not every Rust repository publishes a library crate.
 
 ## Release a Rust library
 

@@ -38,6 +38,16 @@ on:
         required: false
         type: string
         default: "--workspace --no-fail-fast"
+      doc_args:
+        description: Whitespace-separated Cargo arguments for documentation
+        required: false
+        type: string
+        default: "--no-deps"
+      package_args:
+        description: Whitespace-separated Cargo arguments for packaging
+        required: false
+        type: string
+        default: ""
       build_args:
         description: Whitespace-separated Cargo arguments for build
         required: false
@@ -58,6 +68,16 @@ on:
         required: false
         type: boolean
         default: true
+      run_docs:
+        description: Build documentation with warnings denied
+        required: false
+        type: boolean
+        default: false
+      run_package:
+        description: Check that the Cargo package can be created
+        required: false
+        type: boolean
+        default: false
       run_build:
         description: Build the workspace
         required: false
@@ -78,7 +98,7 @@ env:
 jobs:
   quality:
     name: Format and Clippy
-    if: ${{ inputs.run_fmt || inputs.run_clippy }}
+    if: ${{ inputs.run_fmt || inputs.run_clippy || inputs.run_docs || inputs.run_package }}
     runs-on: ${{ inputs.quality_runner }}
 
     steps:
@@ -131,6 +151,39 @@ jobs:
           fi
 
           cargo clippy "${args[@]}" -- -D warnings
+
+      - name: Build documentation
+        if: ${{ inputs.run_docs }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          DOC_ARGS: ${{ inputs.doc_args }}
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          set -euo pipefail
+
+          args=()
+          if [[ -n "$DOC_ARGS" ]]; then
+            read -r -a args <<< "$DOC_ARGS"
+          fi
+
+          cargo doc "${args[@]}"
+
+      - name: Check package
+        if: ${{ inputs.run_package }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          PACKAGE_ARGS: ${{ inputs.package_args }}
+        run: |
+          set -euo pipefail
+
+          args=()
+          if [[ -n "$PACKAGE_ARGS" ]]; then
+            read -r -a args <<< "$PACKAGE_ARGS"
+          fi
+
+          cargo package "${args[@]}"
 
   build:
     name: Build
