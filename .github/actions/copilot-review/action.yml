@@ -1,0 +1,152 @@
+name: Copilot pull request review
+description: Request a GitHub Copilot review, wait for it, and report its feedback in CI
+
+inputs:
+  github-token:
+    description: GitHub token with pull-requests write permission
+    required: true
+  pull-request-number:
+    description: Pull request number; empty uses the pull_request event payload
+    required: false
+    default: ""
+  timeout-seconds:
+    description: Maximum time to wait for Copilot
+    required: false
+    default: "300"
+  poll-interval-seconds:
+    description: Delay between API checks
+    required: false
+    default: "10"
+  fail-on-comments:
+    description: Fail when Copilot leaves a review body or inline comments
+    required: false
+    default: "false"
+
+outputs:
+  review-id:
+    description: Submitted Copilot review ID
+    value: ${{ steps.review.outputs.review-id }}
+  review-url:
+    description: URL of the submitted Copilot review
+    value: ${{ steps.review.outputs.review-url }}
+  comments-count:
+    description: Number of inline Copilot review comments
+    value: ${{ steps.review.outputs.comments-count }}
+  has-feedback:
+    description: Whether Copilot supplied a review body or inline comments
+    value: ${{ steps.review.outputs.has-feedback }}
+
+runs:
+  using: composite
+  steps:
+    - name: Request and collect Copilot review
+      id: review
+      shell: bash
+      env:
+        FAIL_ON_COMMENTS: ${{ inputs.fail-on-comments }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        POLL_INTERVAL_SECONDS: ${{ inputs.poll-interval-seconds }}
+        PR_NUMBER_INPUT: ${{ inputs.pull-request-number }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
+      run: |
+        set -euo pipefail
+
+        if [[ -n "$PR_NUMBER_INPUT" ]]; then
+          pr_number="$PR_NUMBER_INPUT"
+        else
+          pr_number=$(jq -r '.pull_request.number // empty' "$GITHUB_EVENT_PATH")
+        fi
+
+        if [[ ! "$pr_number" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::This action requires a pull request event or pull-request-number"
+          exit 1
+        fi
+        if [[ ! "$TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::timeout-seconds must be a positive integer"
+          exit 1
+        fi
+        if [[ ! "$POLL_INTERVAL_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::poll-interval-seconds must be a positive integer"
+          exit 1
+        fi
+        if [[ "$FAIL_ON_COMMENTS" != "true" && "$FAIL_ON_COMMENTS" != "false" ]]; then
+          echo "::error::fail-on-comments must be true or false"
+          exit 1
+        fi
+
+        head_sha=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '.head.sha')
+
+        request_error=$(mktemp)
+        if ! gh api \
+          --method POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/requested_reviewers" \
+          --input - 2>"$request_error" <<'JSON'
+        {"reviewers":["copilot-pull-request-reviewer[bot]"]}
+        JSON
+        then
+          echo "::error::Could not request Copilot review"
+          sed 's/^/  /' "$request_error"
+          exit 1
+        fi
+        rm -f "$request_error"
+
+        deadline=$((SECONDS + TIMEOUT_SECONDS))
+        review_json=""
+        while (( SECONDS < deadline )); do
+          review_json=$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/reviews" \
+              --jq "[.[] | select(.user.login == \"copilot-pull-request-reviewer[bot]\" and .commit_id == \"${head_sha}\" and .submitted_at != null)] | last // empty"
+          )
+          if [[ -n "$review_json" ]]; then
+            break
+          fi
+          sleep "$POLL_INTERVAL_SECONDS"
+        done
+
+        if [[ -z "$review_json" ]]; then
+          echo "::error::Timed out waiting for Copilot review of ${head_sha}"
+          exit 1
+        fi
+
+        review_id=$(jq -r '.id' <<<"$review_json")
+        review_url=$(jq -r '.html_url' <<<"$review_json")
+        review_body=$(jq -r '.body // ""' <<<"$review_json")
+        comments_json=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/reviews/${review_id}/comments" --slurp)
+        comments_count=$(jq '[.[][]] | length' <<<"$comments_json")
+
+        has_feedback=false
+        if [[ -n "$review_body" || "$comments_count" -gt 0 ]]; then
+          has_feedback=true
+        fi
+
+        {
+          echo "review-id=$review_id"
+          echo "review-url=$review_url"
+          echo "comments-count=$comments_count"
+          echo "has-feedback=$has_feedback"
+        } >> "$GITHUB_OUTPUT"
+
+        {
+          echo "## Copilot code review"
+          echo
+          echo "[Open review](${review_url}) · inline comments: **${comments_count}**"
+          if [[ -n "$review_body" ]]; then
+            echo
+            echo "$review_body"
+          fi
+          jq -r '.[][] | "\n### `\(.path):\(.line // .original_line // 1)`\n\n\(.body)\n\n[Open comment](\(.html_url))"' <<<"$comments_json"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        while IFS=$'\t' read -r path line body; do
+          body=${body//$'\n'/'%0A'}
+          echo "::warning file=${path},line=${line}::${body}"
+        done < <(
+          jq -r '.[][] | [.path, (.line // .original_line // 1), .body] | @tsv' <<<"$comments_json"
+        )
+
+        if [[ "$FAIL_ON_COMMENTS" == "true" && "$has_feedback" == "true" ]]; then
+          echo "::error::Copilot review supplied feedback"
+          exit 1
+        fi
