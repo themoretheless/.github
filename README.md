@@ -58,7 +58,7 @@ Project-specific dependency installation, tests, and build commands intentionall
 
 ## Run Rust CI
 
-The reusable CI checks formatting and Clippy on one runner and runs tests on a configurable runner matrix:
+The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:
 
 ```yaml
 jobs:
@@ -71,6 +71,7 @@ jobs:
       rust_toolchain: "1.96.0"
       test_runners: '["ubuntu-latest", "macos-latest", "windows-latest"]'
       clippy_args: "--workspace --all-targets --locked"
+      build_args: "--workspace --all-targets --all-features --locked"
       test_args: "--workspace --no-fail-fast --locked"
 ```
 
