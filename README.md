@@ -121,6 +121,20 @@ After validation, create the annotated tag and GitHub Release with:
     github-token: ${{ github.token }}
 ```
 
+Validate or publish a Cargo package with the same action:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/publish-crate@v1
+  with:
+    package-name: themoretheless-tokenizer
+    dry-run: true
+
+- uses: themoretheless/.github/.github/actions/publish-crate@v1
+  with:
+    package-name: themoretheless-tokenizer
+    registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+```
+
 ## Run Rust CI
 
 The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:
