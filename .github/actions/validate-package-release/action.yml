@@ -20,11 +20,11 @@ inputs:
     required: false
     default: ""
   confirmation:
-    description: Optional explicit confirmation supplied by the workflow caller
+    description: Optional exact package version supplied as explicit confirmation
     required: false
     default: ""
   confirmation-prefix:
-    description: Confirmation verb, such as publish or release
+    description: Deprecated compatibility input; ignored
     required: false
     default: ""
 
@@ -35,11 +35,9 @@ runs:
       shell: bash
       env:
         CONFIRMATION: ${{ inputs.confirmation }}
-        CONFIRMATION_PREFIX: ${{ inputs.confirmation-prefix }}
         PRERELEASE: ${{ inputs.prerelease }}
         REQUESTED_VERSION: ${{ inputs.requested-version }}
         STABLE_BRANCH: ${{ inputs.stable-branch }}
-        TAG: ${{ inputs.tag }}
         VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
@@ -59,13 +57,8 @@ runs:
           exit 1
         fi
 
-        if [[ -n "$CONFIRMATION" || -n "$CONFIRMATION_PREFIX" ]]; then
-          if [[ -z "$CONFIRMATION" || -z "$CONFIRMATION_PREFIX" ]]; then
-            echo "::error::confirmation and confirmation-prefix must be provided together"
-            exit 1
-          fi
-
-          expected="${CONFIRMATION_PREFIX} ${TAG}"
+        if [[ -n "$CONFIRMATION" ]]; then
+          expected="$VERSION"
           if [[ "$CONFIRMATION" != "$expected" ]]; then
             echo "::error::Confirmation must be exactly: ${expected}"
             exit 1
