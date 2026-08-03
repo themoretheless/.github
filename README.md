@@ -59,8 +59,6 @@ steps:
 
 Project-specific dependency installation, tests, and build commands intentionally remain in the caller.
 
-`setup-rust-web` remains available as a compatibility action for existing callers.
-
 ## Run Rust CI
 
 The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:
