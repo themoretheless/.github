@@ -18,7 +18,7 @@ inputs:
     required: false
     default: "10"
   fail-on-comments:
-    description: Fail when Copilot leaves a review body or inline comments
+    description: Fail when Copilot leaves one or more inline review comments
     required: false
     default: "false"
 
