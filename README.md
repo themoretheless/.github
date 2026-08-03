@@ -59,6 +59,20 @@ steps:
 
 Project-specific dependency installation, tests, and build commands intentionally remain in the caller.
 
+## Set up Rust
+
+The generic Rust composite action installs an optional toolchain and components, prints tool versions, and configures the Cargo cache:
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+  - uses: themoretheless/.github/.github/actions/setup-rust@v1
+    with:
+      rust-toolchain: beta
+      components: rustfmt,clippy
+      cargo-workspaces: ". -> target"
+```
+
 ## Run Rust CI
 
 The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:

@@ -1,0 +1,56 @@
+name: Setup Rust toolchain
+description: Set up a Rust toolchain, optional components, and the Cargo build cache
+
+inputs:
+  rust-toolchain:
+    description: Rust toolchain override; empty uses rust-toolchain.toml or the runner default
+    required: false
+    default: ""
+  components:
+    description: Space- or comma-separated rustup components
+    required: false
+    default: ""
+  working-directory:
+    description: Cargo workspace root
+    required: false
+    default: "."
+  cargo-workspaces:
+    description: Cargo workspaces passed to rust-cache
+    required: false
+    default: ". -> target"
+  cache:
+    description: Cache Cargo dependencies and build artifacts
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Select Rust toolchain
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        COMPONENTS: ${{ inputs.components }}
+        RUST_TOOLCHAIN: ${{ inputs.rust-toolchain }}
+      run: |
+        set -euo pipefail
+
+        if [[ -n "$RUST_TOOLCHAIN" ]]; then
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup override set "$RUST_TOOLCHAIN"
+        fi
+
+        if [[ -n "$COMPONENTS" ]]; then
+          components=${COMPONENTS//,/ }
+          read -r -a args <<< "$components"
+          rustup component add "${args[@]}"
+        fi
+
+        rustc --version --verbose
+        cargo --version
+
+    - name: Cache Rust dependencies
+      if: ${{ inputs.cache == 'true' }}
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      with:
+        workspaces: ${{ inputs.cargo-workspaces }}
