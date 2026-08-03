@@ -56,6 +56,22 @@ steps:
 
 Project-specific dependency installation, tests, and build commands intentionally remain in the caller.
 
+## Configure Dependabot for npm, Rust and .NET
+
+Copy the shared template into a repository's `.github` directory:
+
+```bash
+mkdir -p .github
+curl -fsSL \
+  https://raw.githubusercontent.com/themoretheless/.github/main/templates/dependabot/npm-rust-dotnet.yml \
+  -o .github/dependabot.yml
+```
+
+The template checks npm, Cargo and NuGet dependencies weekly and groups each
+ecosystem into its own pull request. All manifests are assumed to be rooted at
+`/`; adjust the corresponding `directory` when a project keeps a manifest in a
+subdirectory such as `/wasm` or `/src`.
+
 ## Run Rust CI
 
 The reusable CI checks formatting and Clippy on one runner and runs tests on a configurable runner matrix:
