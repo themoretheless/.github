@@ -30,7 +30,7 @@ jobs:
     permissions:
       pages: write
       id-token: write
-    uses: themoretheless/.github/.github/workflows/deploy-pages.yml@v1
+    uses: themoretheless/.github/.github/workflows/deploy-github-pages.yml@v1
 ```
 
 If the uploaded artifact has a custom name, pass `artifact_name` with `with:`.
