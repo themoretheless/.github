@@ -146,7 +146,7 @@ runs:
           jq -r '.[][] | [.path, (.line // .original_line // 1), .body] | @tsv' <<<"$comments_json"
         )
 
-        if [[ "$FAIL_ON_COMMENTS" == "true" && "$has_feedback" == "true" ]]; then
-          echo "::error::Copilot review supplied feedback"
+        if [[ "$FAIL_ON_COMMENTS" == "true" && "$comments_count" -gt 0 ]]; then
+          echo "::error::Copilot review supplied ${comments_count} inline comment(s)"
           exit 1
         fi

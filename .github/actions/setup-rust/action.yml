@@ -26,6 +26,10 @@ inputs:
     description: Cargo workspaces passed to rust-cache
     required: false
     default: ". -> target"
+  cache-key:
+    description: Additional rust-cache key, useful for feature or target matrices
+    required: false
+    default: ""
   cache:
     description: Cache Cargo dependencies and build artifacts
     required: false
@@ -69,6 +73,7 @@ runs:
       uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       with:
         workspaces: ${{ inputs.cargo-workspaces }}
+        key: ${{ inputs.cache-key }}
 
     - name: Install Cargo tools
       if: ${{ inputs.tools != '' }}
