@@ -4,6 +4,26 @@ Reusable workflows and composite actions for repositories owned by [`@themorethe
 
 Triggers and `concurrency` always remain in the calling repository.
 
+## Copilot pull request review
+
+Request a Copilot review from CI, wait for the review of the current PR commit, and expose its comments in the job summary and as workflow annotations:
+
+```yaml
+copilot-review:
+  if: github.event_name == 'pull_request'
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+    pull-requests: write
+  steps:
+    - uses: themoretheless/.github/.github/actions/copilot-review@v1
+      with:
+        github-token: ${{ github.token }}
+        fail-on-comments: true
+```
+
+`fail-on-comments` defaults to `false`. The action also outputs `review-id`, `review-url`, `comments-count`, and `has-feedback`. Copilot reviews are comments rather than approvals, so enable `fail-on-comments` when the CI job should act as a merge gate.
+
 ## Deploy GitHub Pages
 
 Each project builds its own site and uploads a Pages artifact. The shared workflow performs only the deployment:
