@@ -1,5 +1,5 @@
 name: Setup Rust toolchain
-description: Set up a Rust toolchain, optional components, and the Cargo build cache
+description: Set up a Rust toolchain, targets, tools, and the Cargo build cache
 
 inputs:
   rust-toolchain:
@@ -8,6 +8,14 @@ inputs:
     default: ""
   components:
     description: Space- or comma-separated rustup components
+    required: false
+    default: ""
+  targets:
+    description: Space- or comma-separated rustup targets
+    required: false
+    default: ""
+  tools:
+    description: Comma-separated Cargo tools accepted by taiki-e/install-action
     required: false
     default: ""
   working-directory:
@@ -32,6 +40,7 @@ runs:
       env:
         COMPONENTS: ${{ inputs.components }}
         RUST_TOOLCHAIN: ${{ inputs.rust-toolchain }}
+        TARGETS: ${{ inputs.targets }}
       run: |
         set -euo pipefail
 
@@ -46,6 +55,12 @@ runs:
           rustup component add "${args[@]}"
         fi
 
+        if [[ -n "$TARGETS" ]]; then
+          targets=${TARGETS//,/ }
+          read -r -a args <<< "$targets"
+          rustup target add "${args[@]}"
+        fi
+
         rustc --version --verbose
         cargo --version
 
@@ -54,3 +69,10 @@ runs:
       uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       with:
         workspaces: ${{ inputs.cargo-workspaces }}
+
+    - name: Install Cargo tools
+      if: ${{ inputs.tools != '' }}
+      uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
+      with:
+        tool: ${{ inputs.tools }}
+        fallback: none
