@@ -1,0 +1,73 @@
+name: Validate package release
+description: Validate branch policy, requested version, and explicit package release confirmation
+
+inputs:
+  version:
+    description: Resolved package version
+    required: true
+  tag:
+    description: Resolved release tag
+    required: true
+  prerelease:
+    description: Whether the resolved version is a prerelease
+    required: true
+  stable-branch:
+    description: Branch allowed to release stable versions
+    required: false
+    default: main
+  requested-version:
+    description: Optional version supplied by the workflow caller
+    required: false
+    default: ""
+  confirmation:
+    description: Optional explicit confirmation supplied by the workflow caller
+    required: false
+    default: ""
+  confirmation-prefix:
+    description: Confirmation verb, such as publish or release
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Validate package release
+      shell: bash
+      env:
+        CONFIRMATION: ${{ inputs.confirmation }}
+        CONFIRMATION_PREFIX: ${{ inputs.confirmation-prefix }}
+        PRERELEASE: ${{ inputs.prerelease }}
+        REQUESTED_VERSION: ${{ inputs.requested-version }}
+        STABLE_BRANCH: ${{ inputs.stable-branch }}
+        TAG: ${{ inputs.tag }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        if [[ "$GITHUB_REF_TYPE" != "branch" ]]; then
+          echo "::error::Run this workflow against a branch, not a tag"
+          exit 1
+        fi
+
+        if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "$VERSION" ]]; then
+          echo "::error::Requested version ${REQUESTED_VERSION} does not match Cargo.toml ${VERSION}"
+          exit 1
+        fi
+
+        if [[ "$GITHUB_REF_NAME" != "$STABLE_BRANCH" && "$PRERELEASE" != "true" ]]; then
+          echo "::error::Only prerelease versions may be released outside ${STABLE_BRANCH}"
+          exit 1
+        fi
+
+        if [[ -n "$CONFIRMATION" || -n "$CONFIRMATION_PREFIX" ]]; then
+          if [[ -z "$CONFIRMATION" || -z "$CONFIRMATION_PREFIX" ]]; then
+            echo "::error::confirmation and confirmation-prefix must be provided together"
+            exit 1
+          fi
+
+          expected="${CONFIRMATION_PREFIX} ${TAG}"
+          if [[ "$CONFIRMATION" != "$expected" ]]; then
+            echo "::error::Confirmation must be exactly: ${expected}"
+            exit 1
+          fi
+        fi

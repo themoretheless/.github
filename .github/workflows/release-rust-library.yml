@@ -93,15 +93,11 @@ jobs:
           persist-credentials: false
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        uses: themoretheless/.github/.github/actions/setup-rust@63222b3cb4e128dc06cc9d060c744ebb3545c5ef # PR #11
         with:
-          toolchain: ${{ inputs.rust_toolchain }}
+          rust-toolchain: ${{ inputs.rust_toolchain }}
           components: rustfmt,clippy
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          workspaces: ${{ inputs.cargo_workspaces }}
+          cargo-workspaces: ${{ inputs.cargo_workspaces }}
 
       - name: Compare package versions
         id: version

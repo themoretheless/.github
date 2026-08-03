@@ -35,9 +35,9 @@ jobs:
 
 If the uploaded artifact has a custom name, pass `artifact_name` with `with:`.
 
-## Set up Rust and WebAssembly
+## Set up Vue and Rust/WebAssembly
 
-Use separate composite actions for the Vue and Rust/WebAssembly toolchains. Checkout must run first:
+Use the Vue action and configure the generic Rust action with the required targets and tools. Checkout must run first:
 
 ```yaml
 steps:
@@ -46,22 +46,24 @@ steps:
   - uses: themoretheless/.github/.github/actions/setup-vue@v1
     with:
       node-version: "22.13.0"
+      npm-cache-dependency-path: playground/package-lock.json
+      working-directory: playground
 
-  - uses: themoretheless/.github/.github/actions/setup-rust-wasm@v1
+  - uses: themoretheless/.github/.github/actions/setup-rust@v1
     with:
-      rust-version: "1.96.0"
+      rust-toolchain: "1.96.0"
+      targets: wasm32-unknown-unknown
+      tools: wasm-pack@0.14.0,wasm-bindgen-cli@0.2.126
       cargo-workspaces: "wasm -> target"
 
-  - run: npm ci
-  - run: cargo fetch --manifest-path wasm/Cargo.toml --locked
-  - run: npm run build:pages
+  - run: npm --prefix playground run build:pages
 ```
 
 Project-specific dependency installation, tests, and build commands intentionally remain in the caller.
 
 ## Set up Rust
 
-The generic Rust composite action installs an optional toolchain and components, prints tool versions, and configures the Cargo cache:
+The generic Rust composite action installs an optional toolchain, components, targets, and Cargo tools, prints tool versions, and configures the Cargo cache:
 
 ```yaml
 steps:
@@ -71,6 +73,66 @@ steps:
       rust-toolchain: beta
       components: rustfmt,clippy
       cargo-workspaces: ". -> target"
+```
+
+## Resolve a Cargo package version
+
+The version action selects a package from a Cargo workspace and exposes its version, tag, and SemVer prerelease status:
+
+```yaml
+- id: package
+  uses: themoretheless/.github/.github/actions/cargo-package-version@v1
+  with:
+    package-name: themoretheless-tokenizer
+
+- if: steps.package.outputs.prerelease == 'true'
+  run: echo "Preview ${{ steps.package.outputs.tag }}"
+```
+
+Use the release validation action to enforce branch policy and optional explicit confirmation:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/validate-package-release@v1
+  with:
+    version: ${{ steps.package.outputs.version }}
+    tag: ${{ steps.package.outputs.tag }}
+    prerelease: ${{ steps.package.outputs.prerelease }}
+    confirmation: ${{ inputs.confirmation }}
+    confirmation-prefix: release
+```
+
+The tag validation action makes release workflows safely repeatable and rejects an existing tag that points to another commit:
+
+```yaml
+- id: tag
+  uses: themoretheless/.github/.github/actions/validate-release-tag@v1
+  with:
+    tag: ${{ steps.package.outputs.tag }}
+```
+
+After validation, create the annotated tag and GitHub Release with:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/create-github-release@v1
+  with:
+    tag: ${{ steps.package.outputs.tag }}
+    prerelease: ${{ steps.package.outputs.prerelease }}
+    tag-exists: ${{ steps.tag.outputs.exists }}
+    github-token: ${{ github.token }}
+```
+
+Validate or publish a Cargo package with the same action:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/publish-crate@v1
+  with:
+    package-name: themoretheless-tokenizer
+    dry-run: true
+
+- uses: themoretheless/.github/.github/actions/publish-crate@v1
+  with:
+    package-name: themoretheless-tokenizer
+    registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 ```
 
 ## Run Rust CI
