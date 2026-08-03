@@ -37,15 +37,18 @@ If the uploaded artifact has a custom name, pass `artifact_name` with `with:`.
 
 ## Set up Rust and WebAssembly
 
-The composite action installs Node.js, Rust/WASM targets and pinned WebAssembly tools, and configures npm and Cargo caches. Checkout must run first:
+Use separate composite actions for the Vue and Rust/WebAssembly toolchains. Checkout must run first:
 
 ```yaml
 steps:
   - uses: actions/checkout@v7
 
-  - uses: themoretheless/.github/.github/actions/setup-rust-web@v1
+  - uses: themoretheless/.github/.github/actions/setup-vue@v1
     with:
       node-version: "22.13.0"
+
+  - uses: themoretheless/.github/.github/actions/setup-rust-wasm@v1
+    with:
       rust-version: "1.96.0"
       cargo-workspaces: "wasm -> target"
 
@@ -55,6 +58,8 @@ steps:
 ```
 
 Project-specific dependency installation, tests, and build commands intentionally remain in the caller.
+
+`setup-rust-web` remains available as a compatibility action for existing callers.
 
 ## Run Rust CI
 
