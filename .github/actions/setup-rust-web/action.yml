@@ -48,13 +48,13 @@ runs:
         targets: ${{ inputs.rust-targets }}
 
     - name: Cache Rust build
-      uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       with:
         workspaces: ${{ inputs.cargo-workspaces }}
         key: wasm-pack-${{ inputs.wasm-pack-version }}-wasm-bindgen-${{ inputs.wasm-bindgen-cli-version }}
 
     - name: Install WebAssembly build tools
-      uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+      uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
       with:
         tool: "wasm-pack@${{ inputs.wasm-pack-version }},wasm-bindgen-cli@${{ inputs.wasm-bindgen-cli-version }}"
         fallback: none
