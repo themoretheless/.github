@@ -1,0 +1,62 @@
+name: Create GitHub release
+description: Create an annotated tag and GitHub Release for a validated package version
+
+inputs:
+  tag:
+    description: Release tag
+    required: true
+  prerelease:
+    description: Whether to mark the GitHub Release as a prerelease
+    required: true
+  tag-exists:
+    description: Whether the validated tag already exists
+    required: false
+    default: "false"
+  github-token:
+    description: GitHub token allowed to push tags and create releases
+    required: true
+  remote:
+    description: Git remote to receive the tag
+    required: false
+    default: origin
+
+outputs:
+  url:
+    description: GitHub Release URL
+    value: ${{ steps.release.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create tag and GitHub Release
+      id: release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PRERELEASE: ${{ inputs.prerelease }}
+        REMOTE: ${{ inputs.remote }}
+        TAG: ${{ inputs.tag }}
+        TAG_EXISTS: ${{ inputs.tag-exists }}
+      run: |
+        set -euo pipefail
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        if [[ "$TAG_EXISTS" != "true" ]]; then
+          git tag -a "$TAG" -m "Release $TAG"
+          git push "$REMOTE" "$TAG"
+        fi
+
+        release_flags=(--verify-tag --generate-notes --title "$TAG")
+        if [[ "$PRERELEASE" == "true" ]]; then
+          release_flags+=(--prerelease)
+        fi
+
+        if ! gh release view "$TAG" >/dev/null 2>&1; then
+          gh release create "$TAG" "${release_flags[@]}" >/dev/null
+        fi
+
+        url=$(gh release view "$TAG" --json url --jq .url)
+        echo "url=${url}" >> "$GITHUB_OUTPUT"
+        echo "Release: ${url}"

@@ -110,6 +110,17 @@ The tag validation action makes release workflows safely repeatable and rejects 
     tag: ${{ steps.package.outputs.tag }}
 ```
 
+After validation, create the annotated tag and GitHub Release with:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/create-github-release@v1
+  with:
+    tag: ${{ steps.package.outputs.tag }}
+    prerelease: ${{ steps.package.outputs.prerelease }}
+    tag-exists: ${{ steps.tag.outputs.exists }}
+    github-token: ${{ github.token }}
+```
+
 ## Run Rust CI
 
 The reusable CI exposes independent formatting/Clippy, build, and test jobs. Build and test arguments are configurable, and tests can run on a runner matrix:
