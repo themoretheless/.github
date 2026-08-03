@@ -118,7 +118,6 @@ Use the release validation action to enforce branch policy and optional explicit
     tag: ${{ steps.package.outputs.tag }}
     prerelease: ${{ steps.package.outputs.prerelease }}
     confirmation: ${{ inputs.confirmation }}
-    confirmation-prefix: release
 ```
 
 The tag validation action makes release workflows safely repeatable and rejects an existing tag that points to another commit:
