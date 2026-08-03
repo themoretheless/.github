@@ -4,6 +4,26 @@ Reusable workflows and composite actions for repositories owned by [`@themorethe
 
 Triggers and `concurrency` always remain in the calling repository.
 
+## Copilot pull request review
+
+Request a Copilot review from CI, wait for the review of the current PR commit, and expose its comments in the job summary and as workflow annotations:
+
+```yaml
+copilot-review:
+  if: github.event_name == 'pull_request'
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+    pull-requests: write
+  steps:
+    - uses: themoretheless/.github/.github/actions/copilot-review@v1
+      with:
+        github-token: ${{ github.token }}
+        fail-on-comments: true
+```
+
+`fail-on-comments` defaults to `false`. The action also outputs `review-id`, `review-url`, `comments-count`, and `has-feedback`. Copilot reviews are comments rather than approvals, so enable `fail-on-comments` when the CI job should act as a merge gate.
+
 ## Deploy GitHub Pages
 
 Each project builds its own site and uploads a Pages artifact. The shared workflow performs only the deployment:
@@ -30,28 +50,33 @@ jobs:
     permissions:
       pages: write
       id-token: write
-    uses: themoretheless/.github/.github/workflows/deploy-pages.yml@v1
+    uses: themoretheless/.github/.github/workflows/deploy-github-pages.yml@v1
 ```
 
 If the uploaded artifact has a custom name, pass `artifact_name` with `with:`.
 
-## Set up Rust and WebAssembly
+## Set up Vue and Rust/WebAssembly
 
-The composite action installs Node.js, Rust/WASM targets and pinned WebAssembly tools, and configures npm and Cargo caches. Checkout must run first:
+Use the Vue action and configure the generic Rust action with the required targets and tools. Checkout must run first:
 
 ```yaml
 steps:
   - uses: actions/checkout@v7
 
-  - uses: themoretheless/.github/.github/actions/setup-rust-web@v1
+  - uses: themoretheless/.github/.github/actions/setup-vue@v1
     with:
       node-version: "22.13.0"
-      rust-version: "1.96.0"
+      npm-cache-dependency-path: playground/package-lock.json
+      working-directory: playground
+
+  - uses: themoretheless/.github/.github/actions/setup-rust@v1
+    with:
+      rust-toolchain: "1.96.0"
+      targets: wasm32-unknown-unknown
+      tools: wasm-pack@0.14.0,wasm-bindgen-cli@0.2.126
       cargo-workspaces: "wasm -> target"
 
-  - run: npm ci
-  - run: cargo fetch --manifest-path wasm/Cargo.toml --locked
-  - run: npm run build:pages
+  - run: npm --prefix playground run build:pages
 ```
 
 Project-specific dependency installation, tests, and build commands intentionally remain in the caller.
@@ -72,25 +97,78 @@ ecosystem into its own pull request. All manifests are assumed to be rooted at
 `/`; adjust the corresponding `directory` when a project keeps a manifest in a
 subdirectory such as `/wasm` or `/src`.
 
-## Run Rust CI
+## Set up Rust
 
-The reusable CI checks formatting and Clippy on one runner and runs tests on a configurable runner matrix:
+The generic Rust composite action installs an optional toolchain, components, targets, and Cargo tools, prints tool versions, and configures the Cargo cache:
 
 ```yaml
-jobs:
-  rust:
-    permissions:
-      contents: read
-    uses: themoretheless/.github/.github/workflows/rust-ci.yml@v1
+steps:
+  - uses: actions/checkout@v7
+  - uses: themoretheless/.github/.github/actions/setup-rust@v1
     with:
-      working_directory: backend
-      rust_toolchain: "1.96.0"
-      test_runners: '["ubuntu-latest", "macos-latest", "windows-latest"]'
-      clippy_args: "--workspace --all-targets --locked"
-      test_args: "--workspace --no-fail-fast --locked"
+      rust-toolchain: beta
+      components: rustfmt,clippy
+      cargo-workspaces: ". -> target"
 ```
 
-Android, iOS, and WASM packaging stay in platform-specific workflows; this workflow checks the shared host-side Rust code.
+## Resolve a Cargo package version
+
+The version action selects a package from a Cargo workspace and exposes its version, tag, and SemVer prerelease status:
+
+```yaml
+- id: package
+  uses: themoretheless/.github/.github/actions/cargo-package-version@v1
+  with:
+    package-name: themoretheless-tokenizer
+
+- if: steps.package.outputs.prerelease == 'true'
+  run: echo "Preview ${{ steps.package.outputs.tag }}"
+```
+
+Use the release validation action to enforce branch policy and optional explicit confirmation:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/validate-package-release@v1
+  with:
+    version: ${{ steps.package.outputs.version }}
+    tag: ${{ steps.package.outputs.tag }}
+    prerelease: ${{ steps.package.outputs.prerelease }}
+    confirmation: ${{ inputs.confirmation }}
+```
+
+The tag validation action makes release workflows safely repeatable and rejects an existing tag that points to another commit:
+
+```yaml
+- id: tag
+  uses: themoretheless/.github/.github/actions/validate-release-tag@v1
+  with:
+    tag: ${{ steps.package.outputs.tag }}
+```
+
+After validation, create the annotated tag and GitHub Release with:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/create-github-release@v1
+  with:
+    tag: ${{ steps.package.outputs.tag }}
+    prerelease: ${{ steps.package.outputs.prerelease }}
+    tag-exists: ${{ steps.tag.outputs.exists }}
+    github-token: ${{ github.token }}
+```
+
+Validate or publish a Cargo package with the same action:
+
+```yaml
+- uses: themoretheless/.github/.github/actions/publish-crate@v1
+  with:
+    package-name: themoretheless-tokenizer
+    dry-run: true
+
+- uses: themoretheless/.github/.github/actions/publish-crate@v1
+  with:
+    package-name: themoretheless-tokenizer
+    registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+```
 
 ## Release a Rust library
 

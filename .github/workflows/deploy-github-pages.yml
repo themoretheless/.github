@@ -11,11 +11,11 @@ on:
     outputs:
       page_url:
         description: URL of the deployed GitHub Pages site
-        value: ${{ jobs.deploy.outputs.page_url }}
+        value: ${{ jobs.deploy_github_pages.outputs.page_url }}
 
 jobs:
-  deploy:
-    name: Deploy
+  deploy_github_pages:
+    name: Deploy GitHub Pages
     runs-on: ubuntu-latest
 
     permissions:

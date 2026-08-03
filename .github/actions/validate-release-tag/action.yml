@@ -1,0 +1,43 @@
+name: Validate release tag
+description: Check whether a release tag exists and points to the current commit
+
+inputs:
+  tag:
+    description: Release tag to validate
+    required: true
+  remote:
+    description: Git remote containing release tags
+    required: false
+    default: origin
+
+outputs:
+  exists:
+    description: Whether the tag already exists on the remote
+    value: ${{ steps.tag.outputs.exists }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate existing tag state
+      id: tag
+      shell: bash
+      env:
+        REMOTE: ${{ inputs.remote }}
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+
+        if git ls-remote --exit-code --tags "$REMOTE" "refs/tags/${TAG}" >/dev/null 2>&1; then
+          git fetch --force "$REMOTE" "refs/tags/${TAG}:refs/tags/${TAG}"
+          tag_commit=$(git rev-parse "${TAG}^{commit}")
+          head_commit=$(git rev-parse HEAD)
+          if [[ "$tag_commit" != "$head_commit" ]]; then
+            echo "::error::Existing ${TAG} points to ${tag_commit}, not ${head_commit}"
+            exit 1
+          fi
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+          echo "Tag ${TAG} already points to ${head_commit}"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          echo "Tag ${TAG} does not exist on ${REMOTE}"
+        fi

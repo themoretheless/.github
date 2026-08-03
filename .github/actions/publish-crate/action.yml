@@ -1,0 +1,62 @@
+name: Publish Cargo crate
+description: Validate or publish a Cargo package to a registry
+
+inputs:
+  package-name:
+    description: Cargo package to publish
+    required: true
+  registry:
+    description: Cargo registry name
+    required: false
+    default: crates-io
+  registry-token:
+    description: Cargo registry token; required unless dry-run is true
+    required: false
+    default: ""
+  manifest-path:
+    description: Repository-relative path to Cargo.toml
+    required: false
+    default: Cargo.toml
+  locked:
+    description: Require Cargo.lock to be up to date
+    required: false
+    default: "true"
+  dry-run:
+    description: Validate the package without uploading it
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Publish Cargo package
+      shell: bash
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ inputs.registry-token }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        LOCKED: ${{ inputs.locked }}
+        MANIFEST_PATH: ${{ inputs.manifest-path }}
+        PACKAGE_NAME: ${{ inputs.package-name }}
+        REGISTRY: ${{ inputs.registry }}
+      run: |
+        set -euo pipefail
+
+        if [[ "$DRY_RUN" != "true" && -z "$CARGO_REGISTRY_TOKEN" ]]; then
+          echo "::error::Cargo registry token is not configured"
+          exit 1
+        fi
+
+        args=(
+          publish
+          --manifest-path "$MANIFEST_PATH"
+          --package "$PACKAGE_NAME"
+          --registry "$REGISTRY"
+        )
+        if [[ "$LOCKED" == "true" ]]; then
+          args+=(--locked)
+        fi
+        if [[ "$DRY_RUN" == "true" ]]; then
+          args+=(--dry-run)
+        fi
+
+        cargo "${args[@]}"

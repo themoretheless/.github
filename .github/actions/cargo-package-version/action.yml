@@ -1,0 +1,86 @@
+name: Resolve Cargo package version
+description: Resolve a Cargo workspace package version, release tag, and prerelease status
+
+inputs:
+  manifest-path:
+    description: Repository-relative path to Cargo.toml
+    required: false
+    default: Cargo.toml
+  package-name:
+    description: Cargo package name; required for multi-package workspaces
+    required: false
+    default: ""
+  tag-prefix:
+    description: Prefix prepended to the package version
+    required: false
+    default: v
+  locked:
+    description: Require Cargo.lock to be up to date
+    required: false
+    default: "true"
+
+outputs:
+  version:
+    description: Cargo package version
+    value: ${{ steps.version.outputs.version }}
+  tag:
+    description: Release tag
+    value: ${{ steps.version.outputs.tag }}
+  prerelease:
+    description: Whether the version contains a SemVer prerelease component
+    value: ${{ steps.version.outputs.prerelease }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve package version
+      id: version
+      shell: bash
+      env:
+        LOCKED: ${{ inputs.locked }}
+        MANIFEST_PATH: ${{ inputs.manifest-path }}
+        PACKAGE_NAME: ${{ inputs.package-name }}
+        TAG_PREFIX: ${{ inputs.tag-prefix }}
+      run: |
+        set -euo pipefail
+
+        args=(--no-deps --format-version 1 --manifest-path "$MANIFEST_PATH")
+        if [[ "$LOCKED" == "true" ]]; then
+          args+=(--locked)
+        fi
+
+        metadata=$(cargo metadata "${args[@]}")
+        if [[ -n "$PACKAGE_NAME" ]]; then
+          version=$(jq -er --arg name "$PACKAGE_NAME" '
+            [.packages[] | select(.name == $name)] |
+            if length == 1 then .[0].version
+            elif length == 0 then error("package not found")
+            else error("package name matched multiple packages")
+            end
+          ' <<< "$metadata")
+        else
+          version=$(jq -er '
+            if (.packages | length) == 1 then .packages[0].version
+            else error("multiple workspace packages; set package-name")
+            end
+          ' <<< "$metadata")
+        fi
+
+        tag="${TAG_PREFIX}${version}"
+        if ! git check-ref-format "refs/tags/${tag}" >/dev/null; then
+          echo "::error::Invalid release tag: ${tag}"
+          exit 1
+        fi
+
+        prerelease=false
+        if [[ "$version" == *-* ]]; then
+          prerelease=true
+        fi
+
+        {
+          echo "version=${version}"
+          echo "tag=${tag}"
+          echo "prerelease=${prerelease}"
+        } >> "$GITHUB_OUTPUT"
+
+        echo "Package version: ${version} (prerelease: ${prerelease})"
