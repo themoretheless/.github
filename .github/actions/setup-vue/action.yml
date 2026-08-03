@@ -1,5 +1,5 @@
-name: Setup Vue toolchain
-description: Set up Node.js and the npm dependency cache for a Vue project
+name: Setup Vue project
+description: Set up Node.js, restore the npm cache, and install Vue project dependencies
 
 inputs:
   node-version:
@@ -10,6 +10,10 @@ inputs:
     description: Path to the npm lockfile
     required: false
     default: "package-lock.json"
+  working-directory:
+    description: Vue project directory
+    required: false
+    default: "."
 
 runs:
   using: composite
@@ -20,3 +24,8 @@ runs:
         node-version: ${{ inputs.node-version }}
         cache: npm
         cache-dependency-path: ${{ inputs.npm-cache-dependency-path }}
+
+    - name: Install JavaScript dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm ci

@@ -46,6 +46,8 @@ steps:
   - uses: themoretheless/.github/.github/actions/setup-vue@v1
     with:
       node-version: "22.13.0"
+      npm-cache-dependency-path: playground/package-lock.json
+      working-directory: playground
 
   - uses: themoretheless/.github/.github/actions/setup-rust@v1
     with:
@@ -54,9 +56,7 @@ steps:
       tools: wasm-pack@0.14.0,wasm-bindgen-cli@0.2.126
       cargo-workspaces: "wasm -> target"
 
-  - run: npm ci
-  - run: cargo fetch --manifest-path wasm/Cargo.toml --locked
-  - run: npm run build:pages
+  - run: npm --prefix playground run build:pages
 ```
 
 Project-specific dependency installation, tests, and build commands intentionally remain in the caller.
