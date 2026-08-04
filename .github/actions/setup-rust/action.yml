@@ -15,7 +15,7 @@ inputs:
     required: false
     default: ""
   tools:
-    description: Comma-separated Cargo tools accepted by taiki-e/install-action
+    description: Comma-separated Cargo package specs, optionally pinned as package@version
     required: false
     default: ""
   working-directory:
@@ -23,11 +23,11 @@ inputs:
     required: false
     default: "."
   cargo-workspaces:
-    description: Cargo workspaces passed to rust-cache
+    description: Newline-separated Cargo workspaces in "workspace -> target" form
     required: false
     default: ". -> target"
   cache-key:
-    description: Additional rust-cache key, useful for feature or target matrices
+    description: Additional cache key, useful for feature or target matrices
     required: false
     default: ""
   cache:
@@ -68,16 +68,30 @@ runs:
         rustc --version --verbose
         cargo --version
 
+    - name: Prepare Rust cache
+      id: rust-cache
+      if: ${{ inputs.cache == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CACHE_KEY: ${{ inputs.cache-key }}
+        CARGO_WORKSPACES: ${{ inputs.cargo-workspaces }}
+        TOOLS: ${{ inputs.tools }}
+      run: bash "$GITHUB_ACTION_PATH/prepare-cache.sh"
+
     - name: Cache Rust dependencies
       if: ${{ inputs.cache == 'true' }}
-      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        workspaces: ${{ inputs.cargo-workspaces }}
-        key: ${{ inputs.cache-key }}
+        path: ${{ steps.rust-cache.outputs.paths }}
+        key: rust-cache-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ steps.rust-cache.outputs.toolchain }}-${{ steps.rust-cache.outputs.tools }}-${{ steps.rust-cache.outputs.scope }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', 'rust-toolchain', 'rust-toolchain.toml', '.cargo/config', '.cargo/config.toml') }}
+        restore-keys: |
+          rust-cache-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ steps.rust-cache.outputs.toolchain }}-${{ steps.rust-cache.outputs.tools }}-${{ steps.rust-cache.outputs.scope }}-
 
     - name: Install Cargo tools
       if: ${{ inputs.tools != '' }}
-      uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
-      with:
-        tool: ${{ inputs.tools }}
-        fallback: none
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        TOOLS: ${{ inputs.tools }}
+      run: bash "$GITHUB_ACTION_PATH/install-cargo-tools.sh"
