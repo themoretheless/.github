@@ -14,7 +14,7 @@ on:
         type: string
         default: ""
       cargo_workspaces:
-        description: Cargo workspaces passed to rust-cache
+        description: Cargo workspaces and target directories passed to setup-rust
         required: false
         type: string
         default: ". -> target"
@@ -22,7 +22,7 @@ on:
         description: Rust toolchain used for metadata and checks
         required: false
         type: string
-        default: stable
+        default: beta
       tag_prefix:
         description: Prefix prepended to the Cargo package version
         required: false
@@ -93,7 +93,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Rust
-        uses: themoretheless/.github/.github/actions/setup-rust@63222b3cb4e128dc06cc9d060c744ebb3545c5ef # PR #11
+        uses: themoretheless/.github/.github/actions/setup-rust@9b5e9112f3436850758e8b7112254d3ba218c236 # first-party actions
         with:
           rust-toolchain: ${{ inputs.rust_toolchain }}
           components: rustfmt,clippy
@@ -254,53 +254,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: Validate release tag
+        id: tag
+        uses: themoretheless/.github/.github/actions/validate-release-tag@9b5e9112f3436850758e8b7112254d3ba218c236 # first-party actions
+        with:
+          tag: ${{ needs.validate.outputs.tag }}
+
       - name: Create tag and GitHub Release
         id: release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.validate.outputs.tag }}
-          VERSION: ${{ needs.validate.outputs.version }}
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          head_sha=$(git rev-parse HEAD)
-          remote_target=$(
-            git ls-remote origin "refs/tags/${TAG}^{}" |
-              awk 'NR == 1 { print $1 }'
-          )
-          if [[ -z "$remote_target" ]]; then
-            remote_target=$(
-              git ls-remote origin "refs/tags/${TAG}" |
-                awk 'NR == 1 { print $1 }'
-            )
-          fi
-
-          if [[ -n "$remote_target" && "$remote_target" != "$head_sha" ]]; then
-            echo "::error::Tag ${TAG} already points to ${remote_target}, not ${head_sha}"
-            exit 1
-          fi
-
-          if [[ -z "$remote_target" ]]; then
-            git tag -a "$TAG" -m "Release $TAG"
-            git push origin "$TAG"
-          else
-            echo "Tag ${TAG} already points to this commit"
-          fi
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "GitHub Release ${TAG} already exists"
-          else
-            release_flags=(--verify-tag --generate-notes --title "$TAG")
-            if [[ "$VERSION" == *-* ]]; then
-              release_flags+=(--prerelease)
-            fi
-            gh release create "$TAG" "${release_flags[@]}" >/dev/null
-          fi
-
-          release_url=$(gh release view "$TAG" --json url --jq .url)
-          echo "url=${release_url}" >> "$GITHUB_OUTPUT"
-          echo "Release: ${release_url}"
+        uses: themoretheless/.github/.github/actions/create-github-release@9b5e9112f3436850758e8b7112254d3ba218c236 # first-party actions
+        with:
+          tag: ${{ needs.validate.outputs.tag }}
+          prerelease: ${{ contains(needs.validate.outputs.version, '-') }}
+          tag-exists: ${{ steps.tag.outputs.exists }}
+          github-token: ${{ github.token }}

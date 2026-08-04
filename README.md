@@ -109,7 +109,7 @@ manifest in a subdirectory such as `/wasm` or `/src`.
 
 ## Set up Rust
 
-The generic Rust composite action installs an optional toolchain, components, targets, and Cargo tools, prints tool versions, and configures the Cargo cache:
+The generic Rust composite action installs an optional toolchain, components, targets, and Cargo tools, prints tool versions, and configures the Cargo cache. It uses the official `actions/cache` action and installs tools directly with `cargo install --locked`; pin tool specs as `package@version` for reproducible CI:
 
 ```yaml
 steps:
@@ -118,6 +118,7 @@ steps:
     with:
       rust-toolchain: beta
       components: rustfmt,clippy
+      tools: cargo-deny@0.20.2
       cargo-workspaces: ". -> target"
 ```
 
@@ -164,6 +165,11 @@ After validation, create the annotated tag and GitHub Release with:
     prerelease: ${{ steps.package.outputs.prerelease }}
     tag-exists: ${{ steps.tag.outputs.exists }}
     github-token: ${{ github.token }}
+    release-name: Release ${{ steps.package.outputs.tag }}
+    files: |
+      dist/*.tar.gz
+      native-artifacts/**/*
+    fail-on-unmatched-files: true
 ```
 
 Validate or publish a Cargo package with the same action:
@@ -205,7 +211,7 @@ jobs:
     uses: themoretheless/.github/.github/workflows/release-rust-library.yml@v1
 ```
 
-No release is created when the Cargo version is unchanged. Re-running a partially completed release is safe when the existing tag points to the same commit. The default toolchain is `stable`; set `rust_toolchain` explicitly to enforce the library's MSRV.
+No release is created when the Cargo version is unchanged. Re-running a partially completed release is safe when the existing tag points to the same commit. The default toolchain is `beta`; set `rust_toolchain` explicitly when a library must enforce another MSRV.
 
 For a package inside a workspace, identify it explicitly:
 
