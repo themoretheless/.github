@@ -91,22 +91,6 @@ Project-specific dependency installation, tests, and build commands intentionall
 
 Set either `node-version` or `node-version-file`. When `node-version-file` is present, it takes precedence over the action's default `node-version`; the path is relative to the repository root.
 
-## Configure Dependabot for GitHub Actions, npm, Rust and .NET
-
-Copy the shared template into a repository's `.github` directory:
-
-```bash
-mkdir -p .github
-curl -fsSL \
-  https://raw.githubusercontent.com/themoretheless/.github/main/templates/dependabot/npm-rust-dotnet.yml \
-  -o .github/dependabot.yml
-```
-
-The template checks GitHub Actions, npm, Cargo and NuGet dependencies weekly and
-groups each ecosystem into its own pull request. All manifests are assumed to be
-rooted at `/`; adjust the corresponding `directory` when a project keeps a
-manifest in a subdirectory such as `/wasm` or `/src`.
-
 ## Set up Rust
 
 The generic Rust composite action installs an optional toolchain, components, targets, and Cargo tools, prints tool versions, and configures the Cargo cache. It uses the official `actions/cache` action and installs tools directly with `cargo install --locked`; pin tool specs as `package@version` for reproducible CI:
