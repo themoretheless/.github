@@ -1,0 +1,72 @@
+name: Copilot pull request review
+
+on:
+  workflow_call:
+    inputs:
+      pull_request_number:
+        description: Pull request number; empty uses the caller's pull request event payload
+        required: false
+        type: string
+        default: ""
+      timeout_seconds:
+        description: Maximum time to wait for Copilot
+        required: false
+        type: number
+        default: 300
+      poll_interval_seconds:
+        description: Delay between API checks
+        required: false
+        type: number
+        default: 10
+      fail_on_comments:
+        description: Fail when Copilot leaves one or more inline review comments
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      review_id:
+        description: Submitted Copilot review ID
+        value: ${{ jobs.copilot_review.outputs.review_id }}
+      review_url:
+        description: URL of the submitted Copilot review
+        value: ${{ jobs.copilot_review.outputs.review_url }}
+      comments_count:
+        description: Number of inline Copilot review comments
+        value: ${{ jobs.copilot_review.outputs.comments_count }}
+      has_feedback:
+        description: Whether Copilot supplied a review body or inline comments
+        value: ${{ jobs.copilot_review.outputs.has_feedback }}
+
+jobs:
+  copilot_review:
+    name: Copilot pull request review
+    if: >-
+      (github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_target') &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (inputs.pull_request_number == '' ||
+      inputs.pull_request_number == format('{0}', github.event.pull_request.number))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    outputs:
+      review_id: ${{ steps.review.outputs.review-id }}
+      review_url: ${{ steps.review.outputs.review-url }}
+      comments_count: ${{ steps.review.outputs.comments-count }}
+      has_feedback: ${{ steps.review.outputs.has-feedback }}
+
+    steps:
+      - name: Request and collect Copilot review
+        id: review
+        uses: themoretheless/.github/.github/actions/copilot-review@b8b87fb94bcb8e63418bf8fd1d81a5549844b732
+        with:
+          github-token: ${{ github.token }}
+          pull-request-number: ${{ inputs.pull_request_number }}
+          timeout-seconds: ${{ inputs.timeout_seconds }}
+          poll-interval-seconds: ${{ inputs.poll_interval_seconds }}
+          fail-on-comments: ${{ inputs.fail_on_comments }}
