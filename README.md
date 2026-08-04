@@ -6,23 +6,31 @@ Triggers and `concurrency` always remain in the calling repository.
 
 ## Copilot pull request review
 
-Request a Copilot review from CI, wait for the review of the current PR commit, and expose its comments in the job summary and as workflow annotations:
+Keep the event and caller permissions in each project, then delegate the review job to the shared workflow:
 
 ```yaml
-copilot-review:
-  if: github.event_name == 'pull_request'
-  runs-on: ubuntu-latest
-  permissions:
-    contents: read
-    pull-requests: write
-  steps:
-    - uses: themoretheless/.github/.github/actions/copilot-review@v1
-      with:
-        github-token: ${{ github.token }}
-        fail-on-comments: true
+name: Copilot pull request review
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+jobs:
+  copilot-review:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: themoretheless/.github/.github/workflows/copilot-review.yml@v1
+    with:
+      fail_on_comments: true
 ```
 
-`fail-on-comments` defaults to `false`. The action also outputs `review-id`, `review-url`, `comments-count`, and `has-feedback`. Copilot reviews are comments rather than approvals, so enable `fail-on-comments` when the CI job should act as a merge gate.
+The same-repository, non-draft check is repeated inside the reusable workflow as defense in depth. Both `pull_request` and `pull_request_target` callers are supported. The example uses `pull_request_target` so the token can request a review, but neither the caller nor the shared workflow checks out or executes pull request code. The called workflow uses the caller's event and `github.token`; the caller must grant the permissions shown above. It fixes the runner and job timeout centrally while forwarding `pull_request_number`, `timeout_seconds`, `poll_interval_seconds`, and `fail_on_comments` to the underlying action. When supplied, `pull_request_number` must match the caller event's pull request.
+
+`fail_on_comments` defaults to `false`. The workflow also outputs `review_id`, `review_url`, `comments_count`, and `has_feedback`. Copilot reviews are comments rather than approvals, so enable `fail_on_comments` when the CI job should act as a merge gate.
 
 ## Deploy GitHub Pages
 
@@ -65,13 +73,13 @@ steps:
 
   - uses: themoretheless/.github/.github/actions/setup-vue@v1
     with:
-      node-version: "22.13.0"
+      node-version-file: playground/.nvmrc
       npm-cache-dependency-path: playground/package-lock.json
       working-directory: playground
 
   - uses: themoretheless/.github/.github/actions/setup-rust@v1
     with:
-      rust-toolchain: "1.96.0"
+      rust-toolchain: beta
       targets: wasm32-unknown-unknown
       tools: wasm-pack@0.14.0,wasm-bindgen-cli@0.2.126
       cargo-workspaces: "wasm -> target"
@@ -81,7 +89,9 @@ steps:
 
 Project-specific dependency installation, tests, and build commands intentionally remain in the caller.
 
-## Configure Dependabot for npm, Rust and .NET
+Set either `node-version` or `node-version-file`. When `node-version-file` is present, it takes precedence over the action's default `node-version`; the path is relative to the repository root.
+
+## Configure Dependabot for GitHub Actions, npm, Rust and .NET
 
 Copy the shared template into a repository's `.github` directory:
 
@@ -92,10 +102,10 @@ curl -fsSL \
   -o .github/dependabot.yml
 ```
 
-The template checks npm, Cargo and NuGet dependencies weekly and groups each
-ecosystem into its own pull request. All manifests are assumed to be rooted at
-`/`; adjust the corresponding `directory` when a project keeps a manifest in a
-subdirectory such as `/wasm` or `/src`.
+The template checks GitHub Actions, npm, Cargo and NuGet dependencies weekly and
+groups each ecosystem into its own pull request. All manifests are assumed to be
+rooted at `/`; adjust the corresponding `directory` when a project keeps a
+manifest in a subdirectory such as `/wasm` or `/src`.
 
 ## Set up Rust
 
