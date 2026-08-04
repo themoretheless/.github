@@ -88,7 +88,7 @@ Copy the shared template into a repository's `.github` directory:
 ```bash
 mkdir -p .github
 curl -fsSL \
-  https://raw.githubusercontent.com/themoretheless/.github/main/templates/dependabot/npm-rust-dotnet.yml \
+  https://raw.githubusercontent.com/themoretheless/.github/main/templates/dependabot/dependabot.yml \
   -o .github/dependabot.yml
 ```
 
