@@ -63,7 +63,7 @@ jobs:
     steps:
       - name: Request and collect Copilot review
         id: review
-        uses: themoretheless/.github/.github/actions/copilot-review@b8b87fb94bcb8e63418bf8fd1d81a5549844b732
+        uses: themoretheless/.github/.github/actions/copilot-review@d66cd190a0d7a8b45f909dfa97597be34ec93f1f
         with:
           github-token: ${{ github.token }}
           pull-request-number: ${{ inputs.pull_request_number }}
